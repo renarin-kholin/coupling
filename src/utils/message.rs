@@ -8,6 +8,7 @@ type SDP = String;
 pub enum CCMessage {
     SetClientId(UserId),
     CallRequest(UserId),
+    CallRequestFailure,
     CallAnswer(bool, Option<SDP>),
     CallReply(SDP),
 }

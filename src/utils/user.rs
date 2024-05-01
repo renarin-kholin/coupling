@@ -6,6 +6,7 @@ use warp::ws::Message;
 
 pub type UserId = String;
 pub type Users = Arc<RwLock<HashMap<UserId, mpsc::UnboundedSender<Message>>>>;
+pub type UserConnections = Arc<RwLock<HashMap<UserId, UserId>>>; //Initiator is the key
 
 //Make this ID longer and unique in the future and make it a behind the curtains implementation
 pub fn generate_userid() -> UserId {
