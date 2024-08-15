@@ -5,7 +5,7 @@ use futures_util::{FutureExt, SinkExt, StreamExt, TryFutureExt};
 use tokio::sync::{mpsc, RwLock};
 use tokio_stream::iter;
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use utils::message::CCMessage;
+use utils::message::WSCommand;
 use utils::user::{generate_userid, UserConnections, UserId, Users};
 use warp::ws::{Message, WebSocket};
 use warp::Filter;
@@ -46,7 +46,7 @@ async fn user_connected(ws: WebSocket, users: Users, user_connections: UserConne
         }
     });
     users.write().await.insert(new_id.clone(), tx.clone());
-    user_message(&new_id, CCMessage::SetClientId(new_id.clone()), &users).await;
+    user_message(&new_id, WSCommand::SetClientId(new_id.clone()), &users).await;
     while let Some(result) = user_ws_rx.next().await {
         let msg = match result {
             Ok(msg) => msg,
@@ -55,28 +55,28 @@ async fn user_connected(ws: WebSocket, users: Users, user_connections: UserConne
                 break;
             }
         };
-        let cc_message: CCMessage = serde_json::from_str(&msg.to_str().unwrap()).unwrap();
+        let cc_message: WSCommand = serde_json::from_str(&msg.to_str().unwrap()).unwrap();
         match cc_message {
-            CCMessage::CallRequest(user_id) => {
+            WSCommand::CallRequest(user_id) => {
                 println!("callrequest");
                 let failed = call_request_send(&new_id, &user_id, &users, &user_connections).await;
                 if failed {
                     println!("{}", new_id);
                     let users = users.read().await;
                     let tx = users.get(&new_id).unwrap();
-                    let cc_message = CCMessage::CallRequestFailure;
+                    let cc_message = WSCommand::CallRequestFailure;
                     let msg_str = serde_json::to_string(&cc_message).unwrap();
                     if let Err(_disconnected) = tx.send(Message::text(msg_str)) {}
                 }
             }
-            CCMessage::CallAnswer(agreed, sdp) => {
+            WSCommand::CallAnswer(agreed, sdp) => {
                 if agreed && sdp.is_some() {
                     let user_connections = user_connections.read().await;
                     println!("{:?}", user_connections);
                     if let Some(user_connection) = user_connections.get(&new_id) {
                         let users = users.read().await;
                         let tx = users.get(user_connection).unwrap();
-                        let cc_message = CCMessage::CallAnswer(true, Some(sdp.unwrap()));
+                        let cc_message = WSCommand::CallAnswer(true, Some(sdp.unwrap()));
                         let msg_str = serde_json::to_string(&cc_message).unwrap();
                         if let Err(_disconnected) = tx.send(Message::text(msg_str)) {}
                     } else {
@@ -85,14 +85,14 @@ async fn user_connected(ws: WebSocket, users: Users, user_connections: UserConne
                 } else {
                 }
             }
-            CCMessage::CallReply(sdp) => {
+            WSCommand::CallReply(sdp) => {
                 let user_connections = user_connections.read().await;
                 for user_connection in user_connections.iter() {
                     if user_connection.1 == &new_id {
                         let user_id = user_connection.0;
                         let users = users.read().await;
                         let tx = users.get(user_id).unwrap();
-                        let cc_message = CCMessage::CallReply(sdp.clone());
+                        let cc_message = WSCommand::CallReply(sdp.clone());
                         let msg_str = serde_json::to_string(&cc_message).unwrap();
                         if let Err(_disconnected) = tx.send(Message::text(msg_str)) {}
                     }
@@ -106,7 +106,7 @@ async fn user_connected(ws: WebSocket, users: Users, user_connections: UserConne
         println!("msg: {:?}", msg);
     }
 }
-async fn user_message(user_id: &UserId, msg: CCMessage, users: &Users) {
+async fn user_message(user_id: &UserId, msg: WSCommand, users: &Users) {
     let users = users.read().await;
     let tx = users.get(user_id).unwrap();
     if let Err(_disconnected) = tx.send(Message::text(serde_json::to_string(&msg).unwrap())) {}
@@ -124,7 +124,7 @@ async fn call_request_send(
                 .write()
                 .await
                 .insert(user_id.clone(), requester_user_id.clone());
-            let cc_message = CCMessage::CallRequest(requester_user_id.clone());
+            let cc_message = WSCommand::CallRequest(requester_user_id.clone());
             let msg_str = serde_json::to_string(&cc_message).unwrap();
             if let Err(_disconnected) = tx.send(Message::text(msg_str)) {};
             return false;

@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use super::user::UserId;
+pub type SDP = String;
 
-type SDP = String;
 
 #[derive(Serialize, Deserialize)]
-pub enum CCMessage {
+pub enum WSCommand {
     SetClientId(UserId),
     CallRequest(UserId),
     CallRequestFailure,
